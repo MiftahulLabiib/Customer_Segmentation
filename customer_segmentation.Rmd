@@ -1,0 +1,285 @@
+---
+title: "Customer Segmentation Using K-means Clustering"
+author: "Miftahul Labiib Syam"
+date: "2023-07-27"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+In this notebook, we will perform customer segmentation using the K-Means clustering algorithm. Customer segmentation is a powerful technique that allows businesses to divide their customer base into distinct groups based on their shared characteristics. This helps in better understanding customer behavior and tailoring marketing strategies to target specific segments more effectively.
+
+# 1. Dataset
+
+Dataset that we use in this project is collected from [kaggle](https://www.kaggle.com/code/saifawan1997/a-comprehensive-analysis-using-k-means-clustering) which contains the following columns:
+
+1. `Customer ID`: A unique identifier for each customer.
+2. `Gender`: The gender of the customer.
+3. `Age`: The age of the customer.
+4. `Annual Income`: The annual income of the customer.
+5. `Spending Score`: Score assigned by the shop, based on customer behavior and spending nature.
+6. `Profession`: The profession of the customer.
+7. `Work Experience`: The number of years of work experience of the customer.
+8. `Family Size`: The size of the customer's family.
+
+# 2. Read Data
+
+```{r}
+#read data
+customer <- read.csv("data_input/customers.csv")
+head(customer)
+```
+
+After load the dataset, we have to check the datatype of each columns to ensure that our data is stored in appropriate type. We will use `glimpse()` from `dplyr`:
+
+```{r}
+library(dplyr)
+glimpse(customer)
+```
+
+- `Gender` and `Profession` is stored in character and we will convert it to factor.
+- `CustomerID` is an identifier and we will convert it to character.
+
+## 2.1 Change Datatype
+
+```{r}
+customer <- customer %>% 
+  mutate_at(vars(Gender, Profession), as.factor) %>% 
+  mutate(CustomerID = as.character(CustomerID))
+glimpse(customer)
+```
+
+## 2.2 Check missing values and Duplicate
+
+```{r}
+colSums(is.na(customer))
+```
+
+```{r}
+sum(duplicated(customer))
+```
+# 3. EDA
+
+```{r}
+boxplot(customer$Annual.Income....)
+```
+
+```{r}
+boxplot(customer$Age)
+```
+
+```{r}
+boxplot(customer$Spending.Score..1.100.)
+```
+
+```{r}
+work_experience <- boxplot(customer$Work.Experience)
+```
+
+There is one outlier in this column, let's check it out
+
+```{r}
+work_experience$out
+```
+
+We have to remember that outlier has big influence in k-means clustering, so it is very important to determine what step we will do to handle the otlier. In this case, we will not remove it because we think that this outlier is the real data.
+
+```{r}
+boxplot(customer$Family.Size)
+```
+
+```{r}
+unique(customer$Profession)
+```
+
+# 4. Scaling data
+
+Scaling data is crucial when performing k-means clustering because the algorithm calculates distances between data points to form clusters based on their proximity. If the features in the data have different scales, those with larger magnitudes will dominate the clustering process. As a result, features with smaller scales may be ignored, leading to suboptimal or biased clustering results. By scaling the data, we ensure that all features contribute equally to the clustering process, improving the accuracy and fairness of the final clusters produced by k-means.
+
+```{r}
+customer_scaled <- customer %>% 
+  mutate(across(where(is.numeric), scale))
+head(customer_scaled)
+```
+
+# 5. Clustering Using Two Features : Annual Income and Spending Score
+
+in the first part of our analysis, we will consider only two features - Annual Income and Spending Score - to perform customer segmentation. This will help us visualize the clusters in a 2-dimensional space and gain insights into basic customer behaviors.
+
+```{r}
+#subset data
+customer_subset1 <- customer_scaled %>% 
+  select(Annual.Income...., Spending.Score..1.100.)
+```
+
+```{r}
+set.seed(100)
+customer_cluster <- kmeans(x= customer_subset1,
+                           centers = 4)
+```
+
+
+```{r}
+customer$cluster <- as.factor(customer_cluster$cluster)
+clustering <- customer %>% 
+  group_by(cluster) %>% 
+  summarize(average_income = mean(Annual.Income....),
+            average_spending_score = mean(Spending.Score..1.100.))
+
+
+clustering
+```
+
+
+```{r}
+#Return centroid to the real value
+mean_inc <- mean(customer$Annual.Income....)
+mean_spend <- mean(customer$Spending.Score..1.100.)
+sd_inc <- sd(customer$Annual.Income....)
+sd_spend <- sd(customer$Spending.Score..1.100.)
+centroid <- customer_cluster$centers %>% 
+  as.data.frame() %>% 
+  summarize(centroid_income = Annual.Income....*sd_inc+mean_inc,
+            centroid_spend = Spending.Score..1.100.*sd_spend+mean_spend)
+#Buat Scatter Plot untuk memvisualisasikan hasil clustering
+library(ggplot2)
+plot_cluster <- customer %>% 
+  ggplot(mapping = aes(x = Annual.Income...., y = Spending.Score..1.100.)) +
+  geom_point(aes(color = cluster)) +
+  geom_point(data = centroid, aes(x = centroid_income, y = centroid_spend, color=  "Centroid"),
+             size = 5)+
+  labs(title = "Cluster",
+    x= "Annual Income",
+       y= "Spending Score(1-100)",
+    color= "Legend")
+
+plot_cluster
+```
+
+**Conclusion:**
+
+1. Cluster 1:
+- Average Annual Income: $71671.20
+- Average Spending SCore: 74.01452
+This cluster represents customers with low annual income and high spending score. These customers may be categorized as the "*low-income, high-spending group*".
+
+2. Cluster 2: 
+- Average Annual Income: $147967.79
+- Average Spending SCore: 77.89936
+This cluster represents customers with high annual income and high spending score. These customers may be categorized as the "*high-income, high-spending group*".
+
+3. Cluster 3:
+- Average Annual Income: $152400.37
+- Average Spending SCore: 29.99806
+This cluster represents customers with high annual income and low spending score. These customers may be categorized as the "*high-income, low-spending group*".
+
+4. Cluster 4: 
+- Average Annual Income: $73230.99
+- Average Spending SCore: 26.90093
+This cluster represents customers with low annual income and low spending score. These customers may be categorized as the "*low-income, low-spending group*".
+
+Analyzing these clusters allows you to gain insights into the diverse spending behaviors among customer groups, enabling customized marketing approaches. Visualizations like scatter plots or bar charts aid in comprehending cluster distributions and inter-feature relationships. Remember, the conclusions are drawn from mean cluster values, and individual profiles may differ. Further data exploration provides deeper understanding of customer segments and their traits. Now, we'll cluster customers based on 'Age' to uncover insights into behavior and preferences, optimizing marketing strategies and product offerings.
+
+# 6. Clustering Using Three Features : Annual Income, Spending Score, and Age
+
+```{r}
+customer_subset2 <- customer_scaled %>% 
+  select(Annual.Income...., Spending.Score..1.100., Age)
+head(customer_subset2)
+```
+
+```{r}
+set.seed(100)
+customer_six_cluster <- kmeans(x = customer_subset2, centers = 6)
+```
+
+```{r}
+customer_six_cluster$centers
+```
+
+```{r}
+customer_six_cluster$betweenss/customer_six_cluster$totss
+```
+
+```{r}
+customer$cluster_2 <- as.factor(customer_six_cluster$cluster)
+```
+
+```{r}
+#library(rgl)
+mean_age <- mean(customer$Age)
+sd_age<- sd(customer$Age)
+centroid_cluster <- customer_six_cluster$centers %>% 
+  as.data.frame() %>% 
+  summarize(centroid_income = Annual.Income....*sd_inc+mean_inc,
+            centroid_spend = Spending.Score..1.100.*sd_spend+mean_inc,
+            centroid_age = Age*sd_age+mean_age)
+```
+
+
+```{r}
+library(scatterplot3d)
+plot_cluster_six <- plot_cluster_six <- scatterplot3d(
+  x = customer$Age,
+  y = customer$Spending.Score..1.100.,
+  z = customer$Annual.Income....,
+  pch=16, 
+  color = customer$cluster_2,
+  xlab = "Age",
+  ylab = "Spending Score(1-100)",
+  zlab = "Annual Income",
+  angle = 15,
+  grid = T,
+  box = T
+)
+legend("top", legend = levels(customer$cluster_2), col = levels(customer$cluster_2), pch = 16, title = "cluster", horiz = T, inset = -0.30, xpd = T)
+```
+
+```{r}
+clustering_2 <- customer %>% 
+ group_by(cluster_2)%>% 
+  summarize(avg_income = mean(Annual.Income....),
+            avg_spending = mean(Spending.Score..1.100.),
+            avg_age = mean(Age)) %>% 
+  rename(cluster = cluster_2)
+clustering_2
+```
+
+**Conclusion:**
+After applying clustering to the customer dataset, we obtained six distinct clusters based on their characteristics. Each cluster shows different patterns of behavior among the customers. Here are the key conclusions based on the average values of each cluster:
+
+1. Cluster 1 (Senior Frugal Spenders):
+- Customers in this cluster have a moderate annual income.
+- They exhibit a conservative spending behavior with a low spending score.
+- The average age of the customers is the highest among all clusters, indicating a predominantly senior population.
+
+2. Cluster 2 (Young Frugal Earners):
+- Customers in this cluster have a low annual income.
+- They are prudent spenders, with the lowest average spending score among all clusters.
+- The average age of the customers is relatively young, suggesting a focus on younger individuals or young earners.
+
+3. Cluster 3 (High-Spending Young Consumers):
+- Customers in this cluster have a relatively high annual income.
+- They are enthusiastic spenders, reflected by the highest spending score among all clusters.
+- The average age of the customers is the youngest compared to all clusters, indicating a group of young and affluent consumers.
+
+4. Cluster 4 (Middle-Aged Moderate Spenders):
+- Customers in this cluster have the lowest annual income among all clusters.
+- They display a balanced spending behavior with a relatively high spending score.
+- The average age of the customers is moderate, suggesting a middle-aged demographic.
+
+5. Cluster 5 (Affluent Young Savers):
+- Customers in this cluster have the highest average annual income among all clusters.
+- They are cautious spenders, indicated by their relatively low spending score.
+- The customers' age is relatively young, implying a group of affluent and financially responsible young individuals.
+
+6. Cluster 6 (Affluent Senior Shoppers):
+- Customers in this cluster have a relatively high annual income.
+- They are enthusiastic shoppers, as evidenced by their high spending score.
+- The average age is relatively old, suggesting an affluent and older customer segment.
+
+These insights provide valuable information for marketing and business strategies. The clustering results can help target specific customer segments, tailor products or services to meet their needs, and optimize marketing efforts to maximize revenue and customer satisfaction. Additionally, the clusters can serve as a basis for further analysis and exploration of customer behavior and preferences.
